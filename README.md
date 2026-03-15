@@ -74,7 +74,7 @@ end
 
 %% ================= Attacks =================
 kali -->|HTTP / curl| streamlit
-kali -->|прямой запрос| fastapi
+kali -->|прямой запрос| guard_in
 
 
 %% ================= Main Flow =================
@@ -105,7 +105,7 @@ mcp --> fs
 huggingface -.->|модели скачиваются| ollama
 
 
-%% ================= Output =================
+%% ================= Output (Secure Path) =================
 ollama --> guard_out
 guard_out -->|HTML / Markdown / JS| streamlit
 
@@ -113,6 +113,7 @@ guard_out -->|HTML / Markdown / JS| streamlit
 %% ================= Observability =================
 router --> langfuse
 guard_out --> langfuse
+ollama -.-> langfuse
 
 streamlit -.-> prometheus
 ollama -.-> prometheus
