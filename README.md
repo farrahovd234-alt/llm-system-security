@@ -1,138 +1,117 @@
-# Киберполигон: Smart Wiki Security Stand
+# AI Security Cyber Range: Wiki Assistant
 
-## Описание проекта
-**Smart Wiki** — это прототип корпоративной базы знаний с интегрированным ИИ-ассистентом. Система предназначена для автоматизации работы с технической документацией: написания статей, генерации диаграмм и интеллектуального поиска по внутренним регламентам.
+## 📌 О проекте
 
-**Главная идея проекта:**
-Исследование уязвимостей, возникающих при использовании ИИ-агентов для генерации исполняемого контента. В системе реализован подход, при котором вывод LLM (Markdown, HTML, JS-код для диаграмм) напрямую рендерится в интерфейсе или используется для управления данными через инструменты MCP. Это позволяет наглядно демонстрировать атаки классов **Insecure Output Handling** и **Indirect Prompt Injection**.
+Данный проект представляет собой **испытательный полигон**, имитирующий работу корпоративной системы **Wiki** с интегрированным ИИ-ассистентом. 
 
-## Архитектура системы
+Проект разработан для демонстрации и тестирования методов защиты больших языковых моделей (LLM) в закрытом контуре. Он позволяет исследовать векторы атак на ИИ и наглядно показывать работу защитных механизмов в реальном времени.
+
+### Какую задачу решает система?
+Интеграция ИИ в корпоративную среду несет в себе специфические риски безопасности. Данная система решает задачу **безопасного взаимодействия пользователя с LLM и корпоративными данными**, обеспечивая:
+* **Защиту от манипуляций (Prompt Injection):** Нейтрализация попыток подмены системных инструкций вредоносными запросами.
+* **Предотвращение утечек (Data Exfiltration):** Контроль за тем, чтобы конфиденциальная информация из базы знаний не покинула защищенный периметр.
+* **Безопасное управление инструментами (Agent Security):** Ограничение прав ИИ-агента при работе с файловой системой и базами данных через строгие протоколы доступа.
+
+---
+
+## 🏗 Архитектура системы
+
+В основе системы лежит принцип **эшелонированной защиты**. Архитектура четко разделяет роли пользователей, потоки данных и контур мониторинга, исключая возможность прямого доступа к модели в обход фильтров.
 
 ```mermaid
 flowchart LR
 
-%% ================= Attack Surface =================
-subgraph attack["Attack Surface"]
-    kali["Kali<br/>(Атакующий)"]
+%% ================= ВНЕШНИЙ КОНТУР =================
+subgraph surface["Surface Layer (Поверхность доступа)"]
+    direction TB
+    kali["Kali Linux<br/>(Атакующий)"]:::attacker
+    user["User<br/>(Сотрудник)"]:::user
+    admin["Admin<br/>(Аудитор ИБ)"]:::admin
 end
 
-
-%% ================= Ubuntu Host =================
-subgraph ubuntu["Ubuntu"]
-
+%% ================= ВНУТРЕННЯЯ ИНФРАСТРУКТУРА =================
+subgraph ubuntu["Ubuntu Host (Серверная часть)"]
 direction LR
 
+    %% ---------- Пользовательский интерфейс ----------
+    subgraph interface_layer["Interface Layer"]
+        streamlit["Wiki UI<br/>(Streamlit)"]:::ui
+    end
 
-%% ---------- Interface ----------
-subgraph interface["Interface Layer"]
-    streamlit["Wiki UI<br/>(Streamlit)"]
-end
-
-
-%% ---------- API ----------
-subgraph api["API Layer"]
-    subgraph fastapi["FastAPI"]
+    %% ---------- Панель управления ----------
+    subgraph admin_panel["Admin Panel (Secure Zone)"]
         direction TB
-        guard_in["GuardIn"]
-        router["Router"]
-        guard_out["GuardOut"]
+        grafana["Grafana<br/>(Метрики)"]:::monitor
+        langfuse["Langfuse<br/>(Трассировка ИИ)"]:::monitor
+    end
+
+    %% ---------- Ядро логики и защиты ----------
+    subgraph api["API Layer (FastAPI)"]
+        direction TB
+        guard_in["GuardIn<br/>(Входной фильтр)"]:::api
+        router["Router<br/>(Диспетчер)"]:::api
+        guard_out["GuardOut<br/>(Выходной фильтр)"]:::api
+    end
+
+    %% ---------- Искусственный интеллект ----------
+    subgraph ai["AI / LLM Layer"]
+        direction TB
+        rag["RAG Chain"]:::ai
+        agent["Agent<br/>(LangGraph)"]:::ai
+        ollama["Ollama<br/>(LLM Engine)"]:::ai
+    end
+
+    %% ---------- Хранилища и инструменты ----------
+    subgraph data_layer["Data & Tools Layer"]
+        direction TB
+        mcp["MCP Server"]:::tools
+        db[(Wiki Docs / DB / Vector)]:::data
+    end
+
+    %% ---------- Сбор телеметрии ----------
+    subgraph obs["Monitoring Engine"]
+        prometheus["Prometheus + cAdvisor"]:::monitor
     end
 end
 
+%% ================= МАРШРУТЫ ДАННЫХ =================
+kali -->|Direct API Attack| guard_in
+user -->|Web Access| streamlit
+streamlit -->|User Request| guard_in
 
-%% ---------- AI / LLM ----------
-subgraph ai["AI / LLM Layer"]
-    rag["RAG Chain<br/>(Wiki Search)"]
-    agent["Agent LangGraph"]
-    ollama["Ollama<br/>(сервер моделей)"]
-    huggingface["Hugging Face<br/>(репозиторий моделей)"]
-end
-
-
-%% ---------- Tools ----------
-subgraph tools["Tools Layer"]
-    mcp["Tools<br/>(MCP Server)"]
-end
-
-
-%% ---------- Data ----------
-subgraph data["Data Layer"]
-    chroma["ChromaDB<br/>(Векторная база)"]
-    postgres["PostgreSQL<br/>(БД контента и логов)"]
-    fs["Файловая система<br/>(Статьи Wiki)"]
-end
-
-
-%% ---------- Observability ----------
-subgraph observability["Observability"]
-    prometheus["Prometheus + cAdvisor"]
-    langfuse["Langfuse"]
-end
-
-end
-
-
-%% ================= Attacks =================
-kali -->|HTTP / curl| streamlit
-kali -->|прямой запрос| guard_in
-
-
-%% ================= Main Flow =================
-streamlit -->|Запрос на оформление| guard_in
 guard_in --> router
+router --> rag
+router --> agent
+router --> ollama
 
-router -->|mode=rag| rag
-router -->|mode=agent| agent
-router -->|chat / generate| ollama
-
-
-%% ================= RAG =================
-rag --> chroma
-rag --> ollama
-
-
-%% ================= Agent =================
-agent <-->|Think / Act / Observe| ollama
+rag --> db
 agent --> mcp
+mcp --> db
+agent <-->|Think / Act| ollama
 
-
-%% ================= Tools =================
-mcp --> postgres
-mcp --> fs
-
-
-%% ================= Models =================
-huggingface -.->|модели скачиваются| ollama
-
-
-%% ================= Output (Secure Path) =================
 ollama --> guard_out
-guard_out -->|HTML / Markdown / JS| streamlit
+guard_out -->|Clean Content| streamlit
 
+%% ================= МАРШРУТЫ МОНИТОРИНГА =================
+streamlit -.->|Метрики UI| prometheus
+api -.->|Метрики API| prometheus
+ollama -.->|Метрики GPU| prometheus
 
-%% ================= Observability =================
-router --> langfuse
-guard_out --> langfuse
-ollama -.-> langfuse
+prometheus --> grafana
 
-streamlit -.-> prometheus
-ollama -.-> prometheus
-fastapi -.-> prometheus
+router -.->|Логи логики| langfuse
+guard_out -.->|Логи фильтрации| langfuse
 
+admin -.->|Анализ безопасности| grafana
+admin -.->|Анализ безопасности| langfuse
 
-%% ================= Styles =================
-classDef attack fill:#ffd6d6,stroke:#c92a2a,stroke-width:2px,color:#000;
-classDef interface fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#000;
+%% ================= СТИЛИ =================
+classDef attacker fill:#ffd6d6,stroke:#c92a2a,stroke-width:2px,color:#000;
+classDef user fill:#dbeafe,stroke:#1d4ed8,stroke-width:1px,color:#000;
+classDef admin fill:#f3f0ff,stroke:#845ef7,stroke-width:2px,color:#000;
+classDef ui fill:#e0f7fa,stroke:#006064,stroke-width:2px,color:#000;
 classDef api fill:#ede9fe,stroke:#6d28d9,stroke-width:2px,color:#000;
 classDef ai fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#000;
+classDef data fill:#fff3bf,stroke:#f08c00,stroke-width:2px,color:#000;
 classDef tools fill:#ffedd5,stroke:#ea580c,stroke-width:2px,color:#000;
-classDef data fill:#fef9c3,stroke:#ca8a04,stroke-width:2px,color:#000;
-classDef obs fill:#e5e7eb,stroke:#374151,stroke-width:2px,color:#000;
-
-class kali attack
-class streamlit interface
-class guard_in,router,guard_out api
-class rag,agent,ollama,huggingface ai
-class mcp tools
-class chroma,postgres,fs data
-class prometheus,langfuse obs
+classDef monitor fill:#e5e7eb,stroke:#374151,stroke-width:2px,color:#000;
