@@ -15,6 +15,7 @@ _XSS_PATTERN = re.compile(r"<\s*/?\s*script", re.IGNORECASE)
  
 # --- PII patterns ---
 _SSN_PATTERN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+_SNILS_PATTERN = re.compile(r"\b\d{3}-\d{3}-\d{3}\s?\d{2}\b")
 _CARD_PATTERN = re.compile(r"\b(?:\d[ -]*?){16}\b")
  
  
@@ -41,6 +42,9 @@ def check_output(text: str, *, trace=None) -> GuardResult:
  
     if _SSN_PATTERN.search(text):
         reasons.append("PII: SSN pattern detected")
+
+    if _SNILS_PATTERN.search(text):
+        reasons.append("PII: SNILS pattern detected")
  
     if _CARD_PATTERN.search(text):
         reasons.append("PII: credit card number detected")
