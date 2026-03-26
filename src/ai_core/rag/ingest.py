@@ -21,7 +21,9 @@ DEFAULT_CHROMA_PORT = 8000
 DEFAULT_CHROMA_PERSIST_DIR = "chroma_data"
 
 DEFAULT_OLLAMA_URL = "http://ollama:11434"
+DEFAULT_EMBEDDING_PROVIDER = "ollama"
 DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
+DEFAULT_HF_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_CHAT_MODEL = "llama3"
 
 
@@ -33,7 +35,9 @@ class RagConfig:
     chroma_port: int | None
     chroma_persist_dir: str
     ollama_url: str
+    embedding_provider: str
     embedding_model: str
+    hf_embedding_model: str
     chat_model: str
 
     @staticmethod
@@ -46,7 +50,9 @@ class RagConfig:
             chroma_port=int(os.getenv("CHROMA_PORT", str(DEFAULT_CHROMA_PORT))),
             chroma_persist_dir=os.getenv("CHROMA_PERSIST_DIR", DEFAULT_CHROMA_PERSIST_DIR),
             ollama_url=os.getenv("OLLAMA_URL", DEFAULT_OLLAMA_URL),
+            embedding_provider=os.getenv("EMBEDDING_PROVIDER", DEFAULT_EMBEDDING_PROVIDER).lower(),
             embedding_model=os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL),
+            hf_embedding_model=os.getenv("HF_EMBEDDING_MODEL", DEFAULT_HF_EMBEDDING_MODEL),
             chat_model=os.getenv("CHAT_MODEL", DEFAULT_CHAT_MODEL),
         )
 
@@ -120,6 +126,22 @@ def ollama_embed(text: str, *, cfg: RagConfig) -> list[float]:
     return data["embedding"]
 
 
+_HF_EMBEDDER = None
+
+
+def huggingface_embed(text: str, *, cfg: RagConfig) -> list[float]:
+    """
+    Local Hugging Face embeddings via sentence-transformers.
+    """
+    global _HF_EMBEDDER
+    if _HF_EMBEDDER is None:
+        from sentence_transformers import SentenceTransformer
+
+        _HF_EMBEDDER = SentenceTransformer(cfg.hf_embedding_model)
+    vector = _HF_EMBEDDER.encode(text)
+    return vector.tolist()
+
+
 def ollama_chat(system_prompt: str, user_prompt: str, *, cfg: RagConfig) -> str:
     """
     Calls Ollama chat endpoint and returns assistant text content.
@@ -182,7 +204,7 @@ def fake_embedding(text: str, *, dims: int = 384) -> list[float]:
 
 def embed_with_fallback(text: str, *, cfg: RagConfig) -> list[float]:
     """
-    Use Ollama embeddings when available; optional fallback for local offline runs.
+    Use configured embedding provider, optional fallback for local offline runs.
     Enable fallback via RAG_ALLOW_FAKE_EMBEDDINGS=true.
     """
     allow_fake = os.getenv("RAG_ALLOW_FAKE_EMBEDDINGS", "false").lower() in {
@@ -191,8 +213,10 @@ def embed_with_fallback(text: str, *, cfg: RagConfig) -> list[float]:
         "yes",
     }
     try:
+        if cfg.embedding_provider == "huggingface":
+            return huggingface_embed(text, cfg=cfg)
         return ollama_embed(text, cfg=cfg)
-    except requests.RequestException:
+    except (requests.RequestException, ImportError):
         if not allow_fake:
             raise
         return fake_embedding(text)
