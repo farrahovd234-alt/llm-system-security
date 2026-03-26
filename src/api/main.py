@@ -4,6 +4,7 @@ Endpoints:
     POST /api/v1/chat — accept user query, run through GuardIn → LLM → GuardOut.
 """
  
+import asyncio
 import logging
  
 from fastapi import FastAPI, HTTPException
@@ -12,6 +13,7 @@ from pydantic import BaseModel
 from src.api.guard_in import check_input
 from src.api.guard_out import check_output
 from src.api.langfuse_logger import create_trace, flush
+from src.ai_core.rag.ingest import generate_answer
  
 logging.basicConfig(
     level=logging.INFO,
@@ -42,16 +44,6 @@ class ChatResponse(BaseModel):
  
  
 # ---------------------------------------------------------------------------
-# RAG stub — will be replaced by AI-dev's generate_answer
-# ---------------------------------------------------------------------------
- 
-# TODO: заменить на from src.ai_core.rag import generate_answer
-def _placeholder_generate_answer(query: str) -> str:
-    """Temporary stub until AI-dev delivers the RAG pipeline."""
-    return f"[STUB] RAG ответ на: {query}"
- 
- 
-# ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------
  
@@ -59,7 +51,7 @@ def _placeholder_generate_answer(query: str) -> str:
 async def chat(request: ChatRequest):
     """Main chat endpoint.
  
-    Flow: GuardIn → LLM (RAG stub) → GuardOut → Response.
+    Flow: GuardIn → RAG/LLM → GuardOut → Response.
     """
     trace = create_trace(
         name="chat_request",
@@ -84,8 +76,20 @@ async def chat(request: ChatRequest):
             ).model_dump(),
         )
  
-    # 2. LLM / RAG call (stub)
-    llm_answer = _placeholder_generate_answer(request.query)
+    # 2. LLM / RAG call
+    # NOTE: generate_answer() is synchronous; run it in a thread to avoid blocking event loop.
+    try:
+        llm_answer = await asyncio.to_thread(generate_answer, request.query)
+    except Exception as e:
+        reason = f"RAG generation failed: {type(e).__name__}: {e}"
+        logger.exception(reason)
+        if trace is not None:
+            try:
+                trace.update(output={"blocked": True, "reason": reason})
+            except Exception:
+                pass
+        flush()
+        raise HTTPException(status_code=500, detail=ChatResponse(answer="", blocked=True, guard_message=reason).model_dump())
  
     if trace is not None:
         try:
