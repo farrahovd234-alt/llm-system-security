@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  # --- Frontend Zone (Доступна извне) ---
+  ui:
+    # Тимлид потом заменит image на свой, пока заглушка
+    image: streamlit:latest 
+    container_name: llm-ui
+    ports:
+      - "8501:8501"
+    networks:
+      - frontend_net  # UI видит только фронт
+    environment:
+      - API_URL=http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    # Тимлид потом заменит image на свой
+    image: python:3.10-slim 
+    container_name: llm-api
+    command: python -m http.server 8000 # Временная заглушка, чтобы контейнер не падал
+    ports:
+      - "8000:8000"
+    networks:
+      - frontend_net  # Чтобы общаться с UI и Kali
+      - backend_net   # Чтобы общаться с Ollama и Базами
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - DATABASE_URL=postgresql://user:pass@postgres:5432/langfuse
+      - CHROMA_HOST=http://chromadb:8000
+    depends_on:
+      - ollama
+      - postgres
+      - chromadb
+    restart: unless-stopped
+
+  # --- Backend Zone (Изолирована, только для API) ---
+  ollama:
+    image: ollama/ollama:latest
+    container_name: llm-ollama
+    # Порты НЕ пробрасываем наружу (ports), они доступны только внутри сети backend_net
+    expose:
+      - "11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - backend_net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: llm-chroma
+    expose:
+      - "8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - backend_net
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: llm-postgres
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=langfuse
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_demo_db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - backend_net
+    restart: unless-stopped
+
+  langfuse:
+    image: langfuse/langfuse:latest
+    container_name: llm-langfuse
+    ports:
+      - "3000:3000" # Дашборд нужен админу, но Kali его не увидит из-за Firewall
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/langfuse
+      - NEXTAUTH_SECRET=${LANGFUSE_SECRET_KEY}
+      - SALT=${LANGFUSE_PUBLIC_KEY}
+      - NEXTAUTH_URL=http://localhost:3000
+    networks:
+      - backend_net
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+networks:
+  frontend_net:
+    driver: bridge
+  backend_net:
+    driver: bridge
+    internal: true # Изоляция: из этой сети нет выхода в интернет (безопасность)
+
+volumes:
+  ollama_data:
+  chroma_data:
+  postgres_data:
