@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic
+langfuse<4
+chromadb
+PyPDF2
+requests
+sentence-transformers
