@@ -98,8 +98,8 @@ services:
       test: ["CMD-SHELL", "curl -sSf http://localhost:8123/ping || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 10s
+      retries: 20
+      start_period: 30s
 
   langfuse:
     image: langfuse/langfuse:2
