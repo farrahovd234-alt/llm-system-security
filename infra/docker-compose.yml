@@ -94,6 +94,12 @@ services:
     networks:
       - backend_net
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   langfuse:
     image: langfuse/langfuse:2
@@ -114,7 +120,7 @@ services:
       postgres:
         condition: service_healthy
       clickhouse:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
 networks:
