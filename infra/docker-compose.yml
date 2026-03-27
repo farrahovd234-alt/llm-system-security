@@ -7,14 +7,15 @@ services:
       dockerfile: infra/Dockerfile.ui
     container_name: llm-ui
     ports:
-      - "${UI_PORT}:8501"
+      - "${UI_PORT:-8501}:8501"
     networks:
       - frontend_net
     environment:
       - API_URL=${API_URL}
       - API_CHAT_PATH=${API_CHAT_PATH}
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
   api:
@@ -23,7 +24,7 @@ services:
       dockerfile: infra/Dockerfile.api
     container_name: llm-api
     ports:
-      - "${API_PORT}:8000"
+      - "${API_PORT:-8000}:8000"
     networks:
       - frontend_net
       - backend_net
@@ -33,6 +34,12 @@ services:
       - ollama
       - postgres
       - chromadb
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
   ollama:
@@ -68,26 +75,33 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    #  - ./init_demo_db.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./init_demo_db.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-devops_user} -d ${POSTGRES_DB:-langfuse}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   langfuse:
     image: langfuse/langfuse:2
     container_name: llm-langfuse
     ports:
-      - "127.0.0.1:3000:3000"
+      - "${LANGFUSE_PORT:-3000}:3000"
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - NEXTAUTH_SECRET=${LANGFUSE_SECRET_KEY}
       - SALT=${LANGFUSE_PUBLIC_KEY}
-      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_URL=http://${TARGET_IP:-localhost}:${LANGFUSE_PORT:-3000}
+      - TELEMETRY_ENABLED=false
     networks:
       - backend_net
       - frontend_net
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
 networks:
@@ -95,7 +109,6 @@ networks:
     driver: bridge
   backend_net:
     driver: bridge
-    internal: true
 
 volumes:
   ollama_data:
