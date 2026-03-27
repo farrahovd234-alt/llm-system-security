@@ -1,0 +1,104 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Smart Wiki API Gateway",
+    "version": "0.1.0",
+    "description": "Secure gateway с GuardIn/GuardOut фильтрами. Для UI-dev и Red Team: используйте эту схему для настройки UI и скриптов атак."
+  },
+  "paths": {
+    "/api/v1/chat": {
+      "post": {
+        "summary": "Chat endpoint",
+        "description": "Принимает запрос пользователя, прогоняет через GuardIn → LLM (RAG) → GuardOut.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              },
+              "example": {
+                "query": "Как настроить VPN?",
+                "mode": "chat"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Успешный ответ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                },
+                "example": {
+                  "answer": "Для настройки VPN выполните следующие шаги...",
+                  "blocked": false,
+                  "guard_message": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Запрос заблокирован входным фильтром (GuardIn)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                },
+                "example": {
+                  "answer": "",
+                  "blocked": true,
+                  "guard_message": "Blocked stop-words: ignore"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ошибка валидации (неверный формат запроса)"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ChatRequest": {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Текст запроса пользователя"
+          },
+          "mode": {
+            "type": "string",
+            "default": "chat",
+            "description": "Режим работы (chat, rag, agent). Пока поддерживается только chat."
+          }
+        }
+      },
+      "ChatResponse": {
+        "type": "object",
+        "required": ["answer"],
+        "properties": {
+          "answer": {
+            "type": "string",
+            "description": "Ответ от LLM/RAG (пустой если заблокирован)"
+          },
+          "blocked": {
+            "type": "boolean",
+            "default": false,
+            "description": "true если запрос/ответ был заблокирован фильтром"
+          },
+          "guard_message": {
+            "type": "string",
+            "nullable": true,
+            "description": "Причина блокировки (null если не заблокирован)"
+          }
+        }
+      }
+    }
+  }
+}
