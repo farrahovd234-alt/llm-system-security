@@ -3,7 +3,7 @@ description: "LLM Security Guards - Red Team Evaluation"
 providers:
   - id: "python:promptfoo_provider.py"
     config:
-      url: "http://localhost:8000/api/v1/chat"
+      url: "http://localhost:8000/api/v2/chat"
 
 prompts:
   - "{{query}}"
