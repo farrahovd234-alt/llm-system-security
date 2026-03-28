@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   ui:
     build:
@@ -95,7 +93,7 @@ services:
     restart: unless-stopped
 
   langfuse:
-    image: langfuse/langfuse:2.94.1
+    image: langfuse/langfuse:2
     container_name: llm-langfuse
     ports:
       - "${LANGFUSE_PORT:-3000}:3000"
