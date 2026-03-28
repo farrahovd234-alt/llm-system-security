@@ -10,7 +10,7 @@ echo ""
 
 # Check ChromaDB is reachable
 echo "[1/3] Checking ChromaDB..."
-if ! curl -sf http://127.0.0.1:8200/api/v1/heartbeat > /dev/null 2>&1; then
+if ! curl -sf http://127.0.0.1:8200/api/v2/heartbeat > /dev/null 2>&1; then
     echo "ERROR: ChromaDB is not running. Run ./start_server.sh first."
     exit 1
 fi
