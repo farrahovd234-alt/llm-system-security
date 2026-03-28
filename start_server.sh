@@ -28,29 +28,43 @@ docker compose up -d
 echo ""
 echo "[4/4] Waiting for services..."
 
-# Wait for API
+# Wait for API (60s)
+API_OK=false
 for i in $(seq 1 30); do
-    if curl -sf "http://localhost:${API_PORT:-8000}/health" > /dev/null 2>&1; then
-        echo "  API:      http://${TARGET_IP}:${API_PORT:-8000}/docs"
+    if curl -s "http://localhost:${API_PORT:-8000}/health" 2>/dev/null | grep -q "ok"; then
+        echo "  API:      http://${TARGET_IP}:${API_PORT:-8000}/docs  [OK]"
+        API_OK=true
         break
-    fi
-    if [ "$i" -eq 30 ]; then
-        echo "  API:      TIMEOUT (check: docker compose logs api)"
     fi
     sleep 2
 done
+if [ "$API_OK" = false ]; then
+    echo "  API:      не ответил за 60с"
+    echo "            Логи: docker compose logs api"
+fi
 
-# Wait for Langfuse
-for i in $(seq 1 30); do
-    if curl -sf "http://localhost:${LANGFUSE_PORT:-3000}" > /dev/null 2>&1; then
-        echo "  Langfuse: http://${TARGET_IP}:${LANGFUSE_PORT:-3000}"
+# Wait for Langfuse (180s — первый запуск требует миграций БД)
+echo "  Langfuse: ожидание (первый запуск до 3 минут)..."
+LANGFUSE_OK=false
+for i in $(seq 1 90); do
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L \
+        "http://localhost:${LANGFUSE_PORT:-3000}" 2>/dev/null || echo "000")
+    if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
+        echo "  Langfuse: http://${TARGET_IP}:${LANGFUSE_PORT:-3000}  [OK]"
+        echo "            Логин: admin@demo.local / admin123"
+        LANGFUSE_OK=true
         break
     fi
-    if [ "$i" -eq 30 ]; then
-        echo "  Langfuse: TIMEOUT (check: docker compose logs langfuse)"
+    if [ $((i % 10)) -eq 0 ]; then
+        echo "  Langfuse: ещё ждём... ($((i*2))s)"
     fi
     sleep 2
 done
+if [ "$LANGFUSE_OK" = false ]; then
+    echo "  Langfuse: не ответил за 180с"
+    echo "            Статус: docker compose ps langfuse"
+    echo "            Логи:   docker compose logs langfuse"
+fi
 
 echo "  UI:       http://${TARGET_IP}:${UI_PORT:-8501}"
 echo ""
@@ -60,7 +74,7 @@ echo "Red Team (Kali) command:"
 echo "  TARGET_IP=${TARGET_IP} npx promptfoo eval --no-cache"
 echo ""
 echo "View logs:"
-echo "  docker compose -f infra/docker-compose.yml logs -f api"
+echo "  docker compose logs -f api"
 echo ""
 echo "Stop:"
-echo "  docker compose -f infra/docker-compose.yml down"
+echo "  docker compose down"
