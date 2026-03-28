@@ -3,7 +3,7 @@
 Initializes a singleton Langfuse client. Falls back to DummyTrace
 which prints to stdout when Langfuse is unavailable.
 """
-
+ 
 import logging
 import os
 
