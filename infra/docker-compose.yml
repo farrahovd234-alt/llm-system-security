@@ -34,7 +34,7 @@ services:
       postgres:
         condition: service_healthy
       chromadb:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -63,12 +63,6 @@ services:
       - chroma_data:/chroma/chroma
     networks:
       - backend_net
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/heartbeat')"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
     restart: unless-stopped
 
   postgres:
