@@ -106,6 +106,12 @@ services:
       - LANGFUSE_INIT_USER_EMAIL=admin@demo.local
       - LANGFUSE_INIT_USER_PASSWORD=admin123
       - LANGFUSE_INIT_USER_NAME=Admin
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/public/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
     networks:
       - backend_net
       - frontend_net
