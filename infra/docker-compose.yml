@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   ui:
     build:
@@ -91,11 +89,13 @@ services:
     ports:
       - "8123:8123"
       - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
     networks:
       - backend_net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -sSf http://localhost:8123/ping || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 20
@@ -133,3 +133,4 @@ volumes:
   ollama_data:
   chroma_data:
   postgres_data:
+  clickhouse_data:
