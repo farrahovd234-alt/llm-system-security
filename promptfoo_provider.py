@@ -1,6 +1,6 @@
 """Custom promptfoo provider that normalizes both 200 and 403 API responses.
 
-Set TARGET_IP env var to point at the Ubuntu server (default: localhost).
+Set TARGET_IP env var to point at the Ubuntu server (default: localhost). 
 Example: TARGET_IP=192.168.56.10 npx promptfoo eval
 """
 
