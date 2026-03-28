@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   ui:
     build:
@@ -29,9 +31,12 @@ services:
     env_file:
       - .env
     depends_on:
-      - ollama
-      - postgres
-      - chromadb
+      ollama:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -60,6 +65,12 @@ services:
       - chroma_data:/chroma/chroma
     networks:
       - backend_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/heartbeat')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
 
   postgres:
@@ -83,72 +94,33 @@ services:
       retries: 5
     restart: unless-stopped
 
-  clickhouse:
-    image: clickhouse/clickhouse-server:latest
-    container_name: llm-clickhouse
-    ports:
-      - "127.0.0.1:8123:8123"
-      - "127.0.0.1:9000:9000"
-    volumes:
-      - clickhouse_data:/var/lib/clickhouse
-    networks:
-      - backend_net
-    environment:
-      - CLICKHOUSE_DB=langfuse
-      - CLICKHOUSE_USER=clickhouse
-      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
-      - CLICKHOUSE_PASSWORD=clickhouse123
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider 'http://localhost:8123/ping' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
-
   langfuse:
-    image: langfuse/langfuse:2
+    image: langfuse/langfuse:2.94.1
     container_name: llm-langfuse
     ports:
       - "${LANGFUSE_PORT:-3000}:3000"
     environment:
-      # Postgres
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      # ClickHouse — обязательно с логином:паролем и схемой
-      - CLICKHOUSE_MIGRATION_URL=clickhouse://clickhouse:clickhouse123@clickhouse:9000/langfuse
-      - CLICKHOUSE_URL=http://clickhouse:8123
-      - CLICKHOUSE_USER=clickhouse
-      - CLICKHOUSE_PASSWORD=clickhouse123
-      # Auth
       - NEXTAUTH_SECRET=${LANGFUSE_SECRET_KEY}
       - SALT=${LANGFUSE_PUBLIC_KEY}
       - NEXTAUTH_URL=http://${TARGET_IP:-localhost}:${LANGFUSE_PORT:-3000}
-      # Misc
       - TELEMETRY_ENABLED=false
-      - LANGFUSE_INIT_ORG_ID=my-org
-      - LANGFUSE_INIT_ORG_NAME=MyOrg
-      - LANGFUSE_INIT_PROJECT_ID=my-project
-      - LANGFUSE_INIT_PROJECT_NAME=MyProject
+      - LANGFUSE_INIT_ORG_ID=demo-org
+      - LANGFUSE_INIT_ORG_NAME=DemoOrg
+      - LANGFUSE_INIT_PROJECT_ID=demo-project
+      - LANGFUSE_INIT_PROJECT_NAME=LLM-Security
       - LANGFUSE_INIT_PROJECT_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
       - LANGFUSE_INIT_PROJECT_SECRET_KEY=${LANGFUSE_SECRET_KEY}
-      - LANGFUSE_INIT_USER_EMAIL=admin@local.dev
-      - LANGFUSE_INIT_USER_NAME=Admin
+      - LANGFUSE_INIT_USER_EMAIL=admin@demo.local
       - LANGFUSE_INIT_USER_PASSWORD=admin123
+      - LANGFUSE_INIT_USER_NAME=Admin
     networks:
       - backend_net
       - frontend_net
     depends_on:
       postgres:
         condition: service_healthy
-      clickhouse:
-        condition: service_healthy
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/public/health || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 15
-      start_period: 60s
 
 networks:
   frontend_net:
@@ -160,4 +132,3 @@ volumes:
   ollama_data:
   chroma_data:
   postgres_data:
-  clickhouse_data:
