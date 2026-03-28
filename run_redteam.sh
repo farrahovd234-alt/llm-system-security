@@ -8,7 +8,7 @@
 # ============================================================
 set -euo pipefail
 
-TARGET_IP="${1:-${TARGET_IP:-localhost}}"
+TARGET_IP="${1:-${TARGET_IP:-localhost}}" 
 API_PORT="${API_PORT:-8000}"
 API_URL="http://${TARGET_IP}:${API_PORT}"
 
