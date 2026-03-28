@@ -4,7 +4,7 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 API_PORT="${API_PORT:-8000}"
 API_URL="http://localhost:${API_PORT}"
-
+ 
 echo "=== LLM Security Demo ==="
 echo ""
 
